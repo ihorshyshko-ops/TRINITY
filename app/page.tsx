@@ -450,7 +450,7 @@ function InboxView({ items, onDay, onDel, onOpen, goCapture }: {
 }) {
   return (
     <div>
-      <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em" }}>Inbox</h1>
+      <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em" }}>Вхідні</h1>
       <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Тапни задачу, щоб відредагувати. Або закинь у день / видали.</p>
       {items.length === 0 ? (
         <Empty title="Тут поки порожньо" text="Напиши або надиктуй потік думок — задачі впадуть сюди вже розкладеними." cta="Записати думки" onCta={goCapture} />
@@ -502,8 +502,8 @@ function Today({ active, toggle, onOpen, goInbox, hasInbox }: {
       {active.length === 0 ? (
         <Empty
           title="На сьогодні ще нічого"
-          text={hasInbox ? "Обери задачі в Inbox і закинь у день." : "Спершу запиши думки — потім закинеш потрібне в день."}
-          cta={hasInbox ? "Відкрити Inbox" : "Записати думки"}
+          text={hasInbox ? "Обери задачі у Вхідних і закинь у день." : "Спершу запиши думки — потім закинеш потрібне в день."}
+          cta={hasInbox ? "Відкрити Вхідні" : "Записати думки"}
           onCta={goInbox}
         />
       ) : (
@@ -815,7 +815,7 @@ function Nav({ tab, setTab, inboxCount, overdueCount }: {
 }) {
   const items: { id: Tab; label: string; Icon: typeof Mic; badge?: number; danger?: boolean }[] = [
     { id: "capture", label: "Думки", Icon: Mic },
-    { id: "inbox", label: "Inbox", Icon: InboxIcon, badge: inboxCount },
+    { id: "inbox", label: "Вхідні", Icon: InboxIcon, badge: inboxCount },
     { id: "today", label: "Сьогодні", Icon: Sun },
     { id: "week", label: "Тиждень", Icon: CalendarDays },
     { id: "overdue", label: "Горить", Icon: Flame, badge: overdueCount, danger: overdueCount > 0 },
