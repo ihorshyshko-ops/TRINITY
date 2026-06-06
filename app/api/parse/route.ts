@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 type Task = {
   id: string;
   title: string;
-  priority: "must" | "nice";
+  priority: "high" | "med" | "low";
+  category: "work" | "personal";
   estimateMin: number | null;
   deadline: string | null;
   status: "inbox";
@@ -42,10 +43,11 @@ export async function POST(req: Request) {
 `Зараз ${nowLocal} (ISO: ${nowIso}). Це твоя точка відліку для всіх дедлайнів — спирайся саме на цей день тижня й дату.
 Ти — асистент-планувальник. Користувач надиктував потік думок. Перетвори його на конкретні задачі.
 Поверни ВИКЛЮЧНО валідний JSON-масив. Без тексту до/після, без markdown, без \`\`\`.
-Кожен елемент: {"title": "коротке дієслівне формулювання українською", "priority": "must" | "nice", "estimateMin": ціле число хвилин, "deadline": ISO 8601 рядок з датою і часом або null}
+Кожен елемент: {"title": "коротке дієслівне формулювання українською", "priority": "high" | "med" | "low", "category": "work" | "personal", "estimateMin": ціле число хвилин, "deadline": ISO 8601 рядок з датою і часом або null}
 Правила:
 - Розбивай потік на окремі задачі.
-- "must" — термінове або явно важливе; "nice" — бажане, без тиску.
+- priority — рівень терміновості: "high" (висока, горить/важливо/жорсткий дедлайн), "med" (середня, звичайна справа), "low" (низька, без тиску, «колись»).
+- category — "work" для робочих задач (робота, клієнти, проєкти, зустрічі, звіти), "personal" для особистих (побут, родина, здоровʼя, покупки, дозвілля). Якщо неясно — обери ймовірніше за змістом.
 - Дедлайн став ЛИШЕ якщо в тексті є згадка про час або день. Немає згадки → deadline: null (не вигадуй дедлайн).
 - "сьогодні"/"о 15" → сьогоднішня дата; "завтра"/"до завтра" → +1 день.
 - День тижня ("у четвер", "в пʼятницю") = НАЙБЛИЖЧИЙ майбутній такий день відносно сьогодні. Якщо сьогодні вже той день і час не минув — сьогодні; інакше наступний такий день (може бути наступного тижня). Уважно: порахуй від поточного дня тижня, вказаного вище.
@@ -94,11 +96,14 @@ export async function POST(req: Request) {
     const est = Number(t.estimateMin);
     const estimateMin = Number.isFinite(est) && est > 0 ? Math.round(est) : null;
     const deadline = typeof t.deadline === "string" && t.deadline.trim() ? t.deadline.trim() : null;
+    const priority = t.priority === "high" || t.priority === "med" || t.priority === "low" ? t.priority : "med";
+    const category = t.category === "work" || t.category === "personal" ? t.category : "work";
 
     tasks.push({
       id: crypto.randomUUID(),
       title,
-      priority: t.priority === "must" ? "must" : "nice",
+      priority,
+      category,
       estimateMin,
       deadline,
       status: "inbox",

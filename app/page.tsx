@@ -3,22 +3,28 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Mic, Inbox as InboxIcon, Sun, Trash2, ArrowRight,
-  Sparkles, Loader2, Check, Clock, CalendarDays, X, StickyNote,
+  Sparkles, Loader2, Check, Clock, CalendarDays, X, StickyNote, Archive,
 } from "lucide-react";
 
 /* ── types ─────────────────────────────────────────────── */
+type Priority = "high" | "med" | "low";
+type Category = "work" | "personal";
+type Status = "inbox" | "today" | "done";
+
 type Task = {
   id: string;
   title: string;
-  priority: "must" | "nice";
+  priority: Priority;
+  category: Category;
   estimateMin: number | null;
   deadline: string | null;
-  status: "inbox" | "today" | "done";
+  status: Status;
   createdAt: string;
   note?: string;
 };
 
-type Tab = "capture" | "inbox" | "today" | "week";
+type Tab = "capture" | "inbox" | "today" | "week" | "archive";
+type CatFilterValue = "all" | Category;
 
 /* ── theme (TRINITY — deep indigo / teal glow) ─────────── */
 const C = {
@@ -32,8 +38,6 @@ const C = {
   accent: "#2FE0C9",
   accentDark: "#1CB7A4",
   accentGrad: "linear-gradient(135deg, #28D8C4 0%, #5BEAD9 100%)",
-  must: "#FB7185",
-  mustBg: "rgba(251,113,133,0.13)",
   chipBg: "rgba(255,255,255,0.07)",
   done: "#2FE0C9",
   danger: "#FB7185",
@@ -42,6 +46,16 @@ const C = {
 const TEAL = "47,224,201"; // rgb for glow/shadow rgba()
 const fontHead = "'Inter', system-ui, -apple-system, sans-serif";
 const fontBody = "'Inter', system-ui, -apple-system, sans-serif";
+
+const PRIO: Record<Priority, { full: string; short: string; color: string }> = {
+  high: { full: "Висока терміновість", short: "Висока", color: "#FB7185" },
+  med: { full: "Середня терміновість", short: "Середня", color: "#FBBF24" },
+  low: { full: "Низька терміновість", short: "Низька", color: "#34D399" },
+};
+const CAT: Record<Category, { label: string; color: string }> = {
+  work: { label: "Робота", color: "#60A5FA" },
+  personal: { label: "Особисте", color: "#C084FC" },
+};
 
 const chip: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, lineHeight: 1.4, whiteSpace: "nowrap" };
 const cardStyle: React.CSSProperties = { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: "14px 16px", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" };
@@ -114,7 +128,6 @@ function plural(n: number): string {
   if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return "задачі";
   return "задач";
 }
-// ISO → значення для <input type="datetime-local"> у локальному часі
 function isoToLocalInput(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -125,7 +138,7 @@ function isoToLocalInput(iso: string | null | undefined): string {
 
 const STORAGE_KEY = "trinity.tasks.v1";
 
-// Захищена нормалізація збережених даних → масив валідних Task.
+// Захищена нормалізація збережених даних → масив валідних Task (з міграцією старих полів).
 function coerceTasks(input: unknown): Task[] {
   if (!Array.isArray(input)) return [];
   const out: Task[] = [];
@@ -134,12 +147,19 @@ function coerceTasks(input: unknown): Task[] {
     const t = it as Record<string, unknown>;
     const title = typeof t.title === "string" ? t.title : "";
     if (!title.trim()) continue;
-    const status = t.status === "today" || t.status === "done" ? t.status : "inbox";
+    const status: Status = t.status === "today" || t.status === "done" ? t.status : "inbox";
     const est = Number(t.estimateMin);
+    // міграція старого priority "must"/"nice" → high/low
+    let priority: Priority = "med";
+    if (t.priority === "high" || t.priority === "med" || t.priority === "low") priority = t.priority;
+    else if (t.priority === "must") priority = "high";
+    else if (t.priority === "nice") priority = "low";
+    const category: Category = t.category === "personal" ? "personal" : "work";
     out.push({
       id: typeof t.id === "string" && t.id ? t.id : crypto.randomUUID(),
       title,
-      priority: t.priority === "must" ? "must" : "nice",
+      priority,
+      category,
       estimateMin: Number.isFinite(est) && est > 0 ? Math.round(est) : null,
       deadline: typeof t.deadline === "string" && t.deadline ? t.deadline : null,
       status,
@@ -162,6 +182,7 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [catFilter, setCatFilter] = useState<CatFilterValue>("all");
   const recRef = useRef<any>(null);
   const baseRef = useRef("");
 
@@ -171,7 +192,6 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Завантажити збережені задачі (один раз, на клієнті).
   useEffect(() => {
     try {
       const s = localStorage.getItem(STORAGE_KEY);
@@ -180,7 +200,6 @@ export default function App() {
     setLoaded(true);
   }, []);
 
-  // Зберігати при кожній зміні — але лише після первинного завантаження.
   useEffect(() => {
     if (!loaded) return;
     try {
@@ -188,16 +207,19 @@ export default function App() {
     } catch { /* ignore quota / private mode */ }
   }, [tasks, loaded]);
 
-  const inbox = tasks.filter(t => t.status === "inbox");
-  const dayTasks = tasks.filter(t => t.status !== "inbox");
-  const active = dayTasks.filter(t => t.status === "today");
-  const done = dayTasks.filter(t => t.status === "done");
-  const plannedMin = dayTasks.reduce((s, t) => s + (t.estimateMin || 0), 0);
+  const byCat = (arr: Task[]) => (catFilter === "all" ? arr : arr.filter(t => t.category === catFilter));
+
+  const inbox = byCat(tasks.filter(t => t.status === "inbox"));
+  const active = byCat(tasks.filter(t => t.status === "today"));
+  const archived = byCat(tasks.filter(t => t.status === "done"));
+  const weekTasks = byCat(tasks.filter(t => t.status !== "done"));
+  const inboxCount = tasks.filter(t => t.status === "inbox").length;
   const editing = editId ? tasks.find(t => t.id === editId) ?? null : null;
 
   const update = (id: string, patch: Partial<Task>) =>
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
   const remove = (id: string) => setTasks(prev => prev.filter(t => t.id !== id));
+  const toggle = (t: Task) => update(t.id, { status: t.status === "done" ? "today" : "done" });
 
   async function parse() {
     const text = raw.trim();
@@ -212,12 +234,7 @@ export default function App() {
           text,
           nowIso: now.toISOString(),
           nowLocal: now.toLocaleString("uk-UA", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
+            weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
           }),
         }),
       });
@@ -295,6 +312,7 @@ export default function App() {
         <WaveBg />
 
         <BrandBar />
+        {tab !== "capture" && <CatFilter value={catFilter} onChange={setCatFilter} />}
 
         <div className="pk-scroll" style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 20px 16px" }}>
           {tab === "capture" && (
@@ -303,24 +321,23 @@ export default function App() {
           )}
           {tab === "inbox" && (
             <InboxView items={inbox}
-              onDay={(id) => { update(id, { status: "today" }); setToast("Закинув у день"); }}
+              onDay={(id) => { update(id, { status: "today" }); setToast("Додано в сьогодні"); }}
               onDel={remove} onOpen={setEditId} goCapture={() => setTab("capture")} />
           )}
           {tab === "today" && (
-            <Today active={active} done={done} plannedMin={plannedMin}
-              toggle={(t) => update(t.id, { status: t.status === "done" ? "today" : "done" })}
-              onOpen={setEditId}
-              goInbox={() => setTab(inbox.length ? "inbox" : "capture")} hasInbox={inbox.length > 0} />
+            <Today active={active} toggle={toggle} onOpen={setEditId}
+              goInbox={() => setTab(inboxCount ? "inbox" : "capture")} hasInbox={inboxCount > 0} />
           )}
           {tab === "week" && (
-            <Week tasks={tasks}
-              toggle={(t) => update(t.id, { status: t.status === "done" ? "today" : "done" })}
-              onOpen={setEditId}
-              goCapture={() => setTab("capture")} />
+            <Week tasks={weekTasks} toggle={toggle} onOpen={setEditId} goCapture={() => setTab("capture")} />
+          )}
+          {tab === "archive" && (
+            <ArchiveView items={archived} toggle={toggle} onOpen={setEditId}
+              onClear={() => { setTasks(prev => prev.filter(t => t.status !== "done")); setToast("Архів очищено"); }} />
           )}
         </div>
 
-        <Nav tab={tab} setTab={setTab} inboxCount={inbox.length} />
+        <Nav tab={tab} setTab={setTab} inboxCount={inboxCount} />
 
         {toast && (
           <div style={{ position: "absolute", left: 16, right: 16, bottom: 88, zIndex: 5, background: "#241F47", color: C.ink, border: `1px solid ${C.line}`, padding: "12px 16px", borderRadius: 14, fontSize: 14, fontWeight: 500, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
@@ -337,6 +354,28 @@ export default function App() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── category filter ───────────────────────────────────── */
+function CatFilter({ value, onChange }: { value: CatFilterValue; onChange: (v: CatFilterValue) => void }) {
+  const opts: { id: CatFilterValue; label: string }[] = [
+    { id: "all", label: "Усі" },
+    { id: "work", label: "Робота" },
+    { id: "personal", label: "Особисте" },
+  ];
+  return (
+    <div style={{ position: "relative", zIndex: 2, display: "flex", gap: 7, padding: "6px 20px 8px" }}>
+      {opts.map(o => {
+        const on = value === o.id;
+        return (
+          <button key={o.id} className="pk-press" onClick={() => onChange(o.id)}
+            style={{ padding: "7px 15px", borderRadius: 999, border: `1px solid ${on ? C.accent : C.line}`, background: on ? `rgba(${TEAL},0.14)` : "transparent", color: on ? C.accent : C.inkSoft, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: fontBody }}>
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -364,7 +403,7 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
         </div>
       )}
 
-      <div style={{ flex: 1, minHeight: 220, display: "flex" }}>
+      <div style={{ flex: 1, minHeight: 200, display: "flex" }}>
         <textarea
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
@@ -414,7 +453,7 @@ function InboxView({ items, onDay, onDel, onOpen, goCapture }: {
           {items.map(t => (
             <div key={t.id} className="pk-card" style={cardStyle}>
               <div onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                <span style={{ width: 9, height: 9, borderRadius: 999, background: t.priority === "must" ? C.must : C.muted, marginTop: 7, flexShrink: 0, boxShadow: t.priority === "must" ? `0 0 8px ${C.must}` : "none" }} />
+                <span style={{ width: 9, height: 9, borderRadius: 999, background: PRIO[t.priority].color, marginTop: 7, flexShrink: 0, boxShadow: t.priority === "high" ? `0 0 8px ${PRIO.high.color}` : "none" }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3 }}>{t.title}</div>
                   <Meta t={t} />
@@ -432,31 +471,29 @@ function InboxView({ items, onDay, onDel, onOpen, goCapture }: {
   );
 }
 
-function Today({ active, done, plannedMin, toggle, onOpen, goInbox, hasInbox }: {
+function Today({ active, toggle, onOpen, goInbox, hasInbox }: {
   active: Task[];
-  done: Task[];
-  plannedMin: number;
   toggle: (t: Task) => void;
   onOpen: (id: string) => void;
   goInbox: () => void;
   hasInbox: boolean;
 }) {
-  const total = active.length + done.length;
+  const plannedMin = active.reduce((s, t) => s + (t.estimateMin || 0), 0);
   const over = plannedMin > 480;
   return (
     <div>
       <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em" }}>Сьогодні</h1>
-      {total > 0
-        ? <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 14px" }}>{done.length}/{total} зроблено{plannedMin ? ` · заплановано ${fmtDur(plannedMin)}` : ""}</p>
+      {active.length > 0
+        ? <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 14px" }}>{active.length} {plural(active.length)}{plannedMin ? ` · заплановано ${fmtDur(plannedMin)}` : ""}</p>
         : <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Твій план на день.</p>}
 
       {over && (
-        <div style={{ background: C.mustBg, color: C.must, fontSize: 13, fontWeight: 600, padding: "8px 12px", borderRadius: 12, margin: "0 0 14px", border: `1px solid ${C.line}` }}>
+        <div style={{ background: "rgba(251,113,133,0.12)", color: PRIO.high.color, fontSize: 13, fontWeight: 600, padding: "8px 12px", borderRadius: 12, margin: "0 0 14px", border: `1px solid ${C.line}` }}>
           Більше 8 годин на день — щось перенести?
         </div>
       )}
 
-      {total === 0 ? (
+      {active.length === 0 ? (
         <Empty
           title="На сьогодні ще нічого"
           text={hasInbox ? "Обери задачі в Inbox і закинь у день." : "Спершу запиши думки — потім закинеш потрібне в день."}
@@ -465,32 +502,9 @@ function Today({ active, done, plannedMin, toggle, onOpen, goInbox, hasInbox }: 
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-          {active.map(t => <TodayRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
-          {done.map(t => <TodayRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
+          {active.map(t => <TaskRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
         </div>
       )}
-    </div>
-  );
-}
-
-function TodayRow({ t, toggle, onOpen }: { t: Task; toggle: (t: Task) => void; onOpen: (id: string) => void }) {
-  const isDone = t.status === "done";
-  const hasNote = !!(t.note && t.note.trim());
-  return (
-    <div className="pk-card" style={{ ...cardStyle, opacity: isDone ? 0.5 : 1, display: "flex", alignItems: "flex-start", gap: 12, borderLeft: t.priority === "must" && !isDone ? `3px solid ${C.must}` : `1px solid ${C.line}` }}>
-      <button className="pk-press" onClick={() => toggle(t)} aria-label="Готово"
-        style={{ marginTop: 1, width: 26, height: 26, borderRadius: 999, border: `2px solid ${isDone ? C.done : C.line}`, background: isDone ? C.done : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", padding: 0 }}>
-        {isDone && <Check size={15} color="#06231F" />}
-      </button>
-      <div onClick={() => onOpen(t.id)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
-        <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, textDecoration: isDone ? "line-through" : "none" }}>{t.title}</div>
-        {!isDone && <Meta t={t} />}
-        {!isDone && hasNote && (
-          <div style={{ marginTop: 6, fontSize: 13, color: C.inkSoft, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-            {t.note}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -543,16 +557,65 @@ function Week({ tasks, toggle, onOpen, goCapture }: {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {groups.map(g => (
             <div key={g.key}>
-              <div style={{ fontFamily: fontHead, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: g.key === "Прострочено" ? C.must : C.accent, margin: "0 0 8px 2px" }}>
+              <div style={{ fontFamily: fontHead, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: g.key === "Прострочено" ? PRIO.high.color : C.accent, margin: "0 0 8px 2px" }}>
                 {g.key} <span style={{ color: C.muted, fontWeight: 600 }}>· {g.items.length}</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {g.items.map(t => <TodayRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
+                {g.items.map(t => <TaskRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
               </div>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ArchiveView({ items, toggle, onOpen, onClear }: {
+  items: Task[];
+  toggle: (t: Task) => void;
+  onOpen: (id: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div>
+      <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em" }}>Архів</h1>
+      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Виконані задачі. Тап по кружечку — повернути в роботу.</p>
+      {items.length === 0 ? (
+        <Empty title="Архів порожній" text="Виконані задачі (із «Сьогодні» чи «Тиждень») складатимуться сюди." cta="" onCta={() => {}} />
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {items.map(t => <TaskRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
+          </div>
+          <button className="pk-press" onClick={onClear}
+            style={{ marginTop: 18, width: "100%", background: "transparent", color: C.inkSoft, border: `1px solid ${C.line}`, borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: fontBody, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <Trash2 size={16} /> Очистити архів
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TaskRow({ t, toggle, onOpen }: { t: Task; toggle: (t: Task) => void; onOpen: (id: string) => void }) {
+  const isDone = t.status === "done";
+  const hasNote = !!(t.note && t.note.trim());
+  return (
+    <div className="pk-card" style={{ ...cardStyle, opacity: isDone ? 0.5 : 1, display: "flex", alignItems: "flex-start", gap: 12, borderLeft: !isDone ? `3px solid ${PRIO[t.priority].color}` : `1px solid ${C.line}` }}>
+      <button className="pk-press" onClick={() => toggle(t)} aria-label="Готово"
+        style={{ marginTop: 1, width: 26, height: 26, borderRadius: 999, border: `2px solid ${isDone ? C.done : C.line}`, background: isDone ? C.done : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", padding: 0 }}>
+        {isDone && <Check size={15} color="#06231F" />}
+      </button>
+      <div onClick={() => onOpen(t.id)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, textDecoration: isDone ? "line-through" : "none" }}>{t.title}</div>
+        {!isDone && <Meta t={t} />}
+        {!isDone && hasNote && (
+          <div style={{ marginTop: 6, fontSize: 13, color: C.inkSoft, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {t.note}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -565,7 +628,8 @@ function Editor({ task, onSave, onDelete, onClose }: {
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(task.title);
-  const [priority, setPriority] = useState<Task["priority"]>(task.priority);
+  const [priority, setPriority] = useState<Priority>(task.priority);
+  const [category, setCategory] = useState<Category>(task.category);
   const [deadlineLocal, setDeadlineLocal] = useState(isoToLocalInput(task.deadline));
   const [estimate, setEstimate] = useState(task.estimateMin != null ? String(task.estimateMin) : "");
   const [note, setNote] = useState(task.note ?? "");
@@ -578,6 +642,7 @@ function Editor({ task, onSave, onDelete, onClose }: {
     onSave({
       title: title.trim(),
       priority,
+      category,
       deadline: deadlineLocal ? new Date(deadlineLocal).toISOString() : null,
       estimateMin: Number.isFinite(est) && est > 0 ? est : null,
       note: note.trim() ? note.trim() : "",
@@ -602,15 +667,23 @@ function Editor({ task, onSave, onDelete, onClose }: {
           <div>
             <div style={labelStyle}>Опис</div>
             <textarea value={title} onChange={(e) => setTitle(e.target.value)} rows={2}
-              placeholder="Що треба зробити?"
-              style={{ ...fieldStyle, resize: "none", lineHeight: 1.4 }} />
+              placeholder="Що треба зробити?" style={{ ...fieldStyle, resize: "none", lineHeight: 1.4 }} />
           </div>
 
           <div>
-            <div style={labelStyle}>Пріоритет</div>
+            <div style={labelStyle}>Терміновість</div>
             <div style={{ display: "flex", gap: 8 }}>
-              <SegBtn active={priority === "must"} onClick={() => setPriority("must")} color={C.must} label="Важливо" />
-              <SegBtn active={priority === "nice"} onClick={() => setPriority("nice")} color={C.accent} label="Звичайне" />
+              {(["high", "med", "low"] as Priority[]).map(p => (
+                <SegBtn key={p} active={priority === p} onClick={() => setPriority(p)} color={PRIO[p].color} label={PRIO[p].short} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={labelStyle}>Категорія</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <SegBtn active={category === "work"} onClick={() => setCategory("work")} color={CAT.work.color} label={CAT.work.label} />
+              <SegBtn active={category === "personal"} onClick={() => setCategory("personal")} color={CAT.personal.color} label={CAT.personal.label} />
             </div>
           </div>
 
@@ -637,8 +710,7 @@ function Editor({ task, onSave, onDelete, onClose }: {
           <div>
             <div style={labelStyle}>Примітки</div>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4}
-              placeholder="Деталі, посилання, контекст…"
-              style={{ ...fieldStyle, resize: "none", lineHeight: 1.45 }} />
+              placeholder="Деталі, посилання, контекст…" style={{ ...fieldStyle, resize: "none", lineHeight: 1.45 }} />
           </div>
 
           <button className="pk-press" onClick={onDelete}
@@ -654,7 +726,7 @@ function Editor({ task, onSave, onDelete, onClose }: {
 function SegBtn({ active, onClick, color, label }: { active: boolean; onClick: () => void; color: string; label: string }) {
   return (
     <button className="pk-press" onClick={onClick}
-      style={{ flex: 1, height: 44, borderRadius: 12, border: `1px solid ${active ? color : C.line}`, background: active ? `${color}22` : C.surfaceSolid, color: active ? color : C.inkSoft, fontWeight: 700, fontSize: 14.5, cursor: "pointer", fontFamily: fontBody }}>
+      style={{ flex: 1, height: 44, borderRadius: 12, border: `1px solid ${active ? color : C.line}`, background: active ? `${color}22` : C.surfaceSolid, color: active ? color : C.inkSoft, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: fontBody, padding: "0 4px" }}>
       {label}
     </button>
   );
@@ -665,9 +737,12 @@ function Meta({ t }: { t: Task }) {
   const dur = fmtDur(t.estimateMin);
   const dl = fmtDeadline(t.deadline);
   const hasNote = !!(t.note && t.note.trim());
-  if (!dur && !dl && !hasNote) return null;
+  const p = PRIO[t.priority];
+  const c = CAT[t.category];
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 7, alignItems: "center" }}>
+      <span style={{ ...chip, background: `${p.color}22`, color: p.color }}>{p.short}</span>
+      <span style={{ ...chip, background: `${c.color}22`, color: c.color }}>{c.label}</span>
       {dur && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft, display: "inline-flex", alignItems: "center", gap: 4 }}><Clock size={12} /> {dur}</span>}
       {dl && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft }}>{dl}</span>}
       {hasNote && (
@@ -693,7 +768,9 @@ function Empty({ title, text, cta, onCta }: {
       </div>
       <div style={{ fontFamily: fontHead, fontSize: 21, fontWeight: 700, color: C.ink, marginBottom: 7 }}>{title}</div>
       <div style={{ color: C.inkSoft, fontSize: 14.5, lineHeight: 1.45, maxWidth: 280, marginBottom: 20 }}>{text}</div>
-      <button className="pk-press" onClick={onCta} style={{ background: C.accentGrad, color: "#06231F", border: "none", borderRadius: 13, padding: "12px 20px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: fontBody, boxShadow: `0 10px 28px rgba(${TEAL},.4)` }}>{cta}</button>
+      {cta && (
+        <button className="pk-press" onClick={onCta} style={{ background: C.accentGrad, color: "#06231F", border: "none", borderRadius: 13, padding: "12px 20px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: fontBody, boxShadow: `0 10px 28px rgba(${TEAL},.4)` }}>{cta}</button>
+      )}
     </div>
   );
 }
@@ -708,21 +785,22 @@ function Nav({ tab, setTab, inboxCount }: {
     { id: "inbox", label: "Inbox", Icon: InboxIcon, badge: inboxCount },
     { id: "today", label: "Сьогодні", Icon: Sun },
     { id: "week", label: "Тиждень", Icon: CalendarDays },
+    { id: "archive", label: "Архів", Icon: Archive },
   ];
   return (
-    <div style={{ position: "relative", zIndex: 2, flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: "rgba(20,18,51,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", padding: "8px 8px 10px" }}>
+    <div style={{ position: "relative", zIndex: 2, flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: "rgba(20,18,51,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", padding: "8px 4px 10px" }}>
       {items.map(({ id, label, Icon, badge }) => {
         const on = tab === id;
         return (
           <button key={id} className="pk-press" onClick={() => setTab(id)}
-            style={{ flex: 1, background: "transparent", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "8px 0", cursor: "pointer" }}>
+            style={{ flex: 1, background: "transparent", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 0", cursor: "pointer" }}>
             <div style={{ position: "relative" }}>
-              <Icon size={23} color={on ? C.accent : C.muted} strokeWidth={on ? 2.4 : 2} />
+              <Icon size={22} color={on ? C.accent : C.muted} strokeWidth={on ? 2.4 : 2} />
               {badge ? (
-                <span style={{ position: "absolute", top: -5, right: -9, background: C.accent, color: "#06231F", fontSize: 10.5, fontWeight: 700, minWidth: 16, height: 16, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{badge}</span>
+                <span style={{ position: "absolute", top: -5, right: -9, background: C.accent, color: "#06231F", fontSize: 10, fontWeight: 700, minWidth: 15, height: 15, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{badge}</span>
               ) : null}
             </div>
-            <span style={{ fontSize: 11, fontWeight: on ? 700 : 500, color: on ? C.accent : C.muted }}>{label}</span>
+            <span style={{ fontSize: 10.5, fontWeight: on ? 700 : 500, color: on ? C.accent : C.muted }}>{label}</span>
           </button>
         );
       })}
