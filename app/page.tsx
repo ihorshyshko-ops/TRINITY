@@ -20,25 +20,26 @@ type Task = {
 
 type Tab = "capture" | "inbox" | "today" | "week";
 
-/* ── theme (dark / purple glass) ───────────────────────── */
+/* ── theme (TRINITY — deep indigo / teal glow) ─────────── */
 const C = {
-  bgOuter: "#060410",
-  bg: "#0E0B18",
-  surface: "rgba(255,255,255,0.05)",
-  surfaceSolid: "#17131F",
-  ink: "#F3F1FA",
-  inkSoft: "#A39FB4",
-  line: "rgba(255,255,255,0.09)",
-  accent: "#8B5CF6",
-  accentDark: "#7C3AED",
-  accentGrad: "linear-gradient(135deg, #8B5CF6 0%, #B292F8 100%)",
-  must: "#F472B6",
-  mustBg: "rgba(244,114,182,0.13)",
+  bgOuter: "#09081C",
+  bg: "#141233",
+  surface: "rgba(255,255,255,0.055)",
+  surfaceSolid: "#1E1B40",
+  ink: "#EAF1F6",
+  inkSoft: "#959DBC",
+  line: "rgba(255,255,255,0.10)",
+  accent: "#2FE0C9",
+  accentDark: "#1CB7A4",
+  accentGrad: "linear-gradient(135deg, #28D8C4 0%, #5BEAD9 100%)",
+  must: "#FB7185",
+  mustBg: "rgba(251,113,133,0.13)",
   chipBg: "rgba(255,255,255,0.07)",
-  done: "#34D399",
-  danger: "#F26D6D",
-  muted: "#6E6982",
+  done: "#2FE0C9",
+  danger: "#FB7185",
+  muted: "#5F6590",
 };
+const TEAL = "47,224,201"; // rgb for glow/shadow rgba()
 const fontHead = "'Inter', system-ui, -apple-system, sans-serif";
 const fontBody = "'Inter', system-ui, -apple-system, sans-serif";
 
@@ -48,6 +49,44 @@ const dayBtn: React.CSSProperties = { flex: 1, height: 40, borderRadius: 11, bor
 const delBtn: React.CSSProperties = { width: 44, height: 40, borderRadius: 11, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.06)", color: C.inkSoft, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 };
 const fieldStyle: React.CSSProperties = { width: "100%", background: C.surfaceSolid, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontSize: 15, color: C.ink, outline: "none", fontFamily: fontBody };
 const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: C.inkSoft, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 7px 2px" };
+
+/* ── brand ─────────────────────────────────────────────── */
+function Logo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none"
+      style={{ filter: `drop-shadow(0 0 6px rgba(${TEAL},0.75))`, flexShrink: 0 }}>
+      <g stroke={C.accent} strokeWidth="3.4" strokeLinecap="round">
+        <circle cx="50" cy="37" r="21" />
+        <circle cx="33" cy="64" r="21" />
+        <circle cx="67" cy="64" r="21" />
+      </g>
+    </svg>
+  );
+}
+
+function BrandBar() {
+  return (
+    <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 11, padding: "14px 20px 4px" }}>
+      <Logo size={28} />
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+        <span style={{ fontFamily: fontHead, fontWeight: 800, fontSize: 17, letterSpacing: "0.2em", color: C.ink }}>TRINITY</span>
+        <span style={{ fontSize: 10.5, color: C.accent, letterSpacing: "0.04em", marginTop: 4 }}>Твій потік пріоритетів</span>
+      </div>
+    </div>
+  );
+}
+
+function WaveBg() {
+  return (
+    <svg aria-hidden viewBox="0 0 430 920" preserveAspectRatio="none"
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0, pointerEvents: "none" }}>
+      <path d="M-20 250 Q 110 208 215 250 T 450 250" fill="none" stroke={`rgba(${TEAL},0.11)`} strokeWidth="1.4" />
+      <path d="M-20 410 Q 130 366 215 410 T 450 410" fill="none" stroke={`rgba(${TEAL},0.08)`} strokeWidth="1.4" />
+      <path d="M-20 600 Q 95 552 215 600 T 450 600" fill="none" stroke="rgba(124,108,246,0.08)" strokeWidth="1.4" />
+      <path d="M-20 770 Q 140 726 215 770 T 450 770" fill="none" stroke={`rgba(${TEAL},0.06)`} strokeWidth="1.4" />
+    </svg>
+  );
+}
 
 /* ── helpers ───────────────────────────────────────────── */
 function fmtDur(min: number | null): string {
@@ -141,8 +180,7 @@ export default function App() {
     setLoaded(true);
   }, []);
 
-  // Зберігати при кожній зміні — але лише після первинного завантаження,
-  // щоб не затерти сховище порожнім масивом до гідрації.
+  // Зберігати при кожній зміні — але лише після первинного завантаження.
   useEffect(() => {
     if (!loaded) return;
     try {
@@ -243,7 +281,7 @@ export default function App() {
         @keyframes pkUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @keyframes pkSheet { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
         @keyframes pkSpin { to { transform: rotate(360deg); } }
-        @keyframes pkPulse { 0% { box-shadow: 0 0 0 0 rgba(139,92,246,.55); } 70% { box-shadow: 0 0 0 18px rgba(139,92,246,0); } 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); } }
+        @keyframes pkPulse { 0% { box-shadow: 0 0 0 0 rgba(${TEAL},.55); } 70% { box-shadow: 0 0 0 18px rgba(${TEAL},0); } 100% { box-shadow: 0 0 0 0 rgba(${TEAL},0); } }
         @keyframes pkBlink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
         .pk-card { animation: pkUp .28s ease both; }
         .pk-sheet { animation: pkSheet .26s cubic-bezier(.2,.7,.3,1) both; }
@@ -253,9 +291,12 @@ export default function App() {
       `}</style>
 
       <div style={{ width: "100%", maxWidth: 430, height: "100%", background: C.bg, display: "flex", flexDirection: "column", position: "relative", boxShadow: "0 0 80px rgba(0,0,0,.5)", overflow: "hidden" }}>
-        <div aria-hidden style={{ position: "absolute", top: -140, left: "50%", transform: "translateX(-50%)", width: 460, height: 340, background: "radial-gradient(circle at center, rgba(139,92,246,0.40), rgba(139,92,246,0) 68%)", pointerEvents: "none", zIndex: 0 }} />
+        <div aria-hidden style={{ position: "absolute", top: -150, left: "50%", transform: "translateX(-50%)", width: 480, height: 360, background: `radial-gradient(circle at center, rgba(${TEAL},0.30), rgba(${TEAL},0) 68%)`, pointerEvents: "none", zIndex: 0 }} />
+        <WaveBg />
 
-        <div className="pk-scroll" style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto", padding: "26px 20px 16px" }}>
+        <BrandBar />
+
+        <div className="pk-scroll" style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 20px 16px" }}>
           {tab === "capture" && (
             <Capture raw={raw} setRaw={setRaw} parse={parse} loading={loading}
               listening={listening} toggleVoice={toggleVoice} setExample={() => setRaw(EXAMPLE)} />
@@ -282,7 +323,7 @@ export default function App() {
         <Nav tab={tab} setTab={setTab} inboxCount={inbox.length} />
 
         {toast && (
-          <div style={{ position: "absolute", left: 16, right: 16, bottom: 88, zIndex: 5, background: "#241F38", color: C.ink, border: `1px solid ${C.line}`, padding: "12px 16px", borderRadius: 14, fontSize: 14, fontWeight: 500, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
+          <div style={{ position: "absolute", left: 16, right: 16, bottom: 88, zIndex: 5, background: "#241F47", color: C.ink, border: `1px solid ${C.line}`, padding: "12px 16px", borderRadius: 14, fontSize: 14, fontWeight: 500, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
             {toast}
           </div>
         )}
@@ -317,7 +358,7 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
       <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px", lineHeight: 1.45 }}>Вивали все підряд — текстом або голосом. Я розкладу це на задачі з пріоритетом, часом і дедлайнами.</p>
 
       {listening && (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, background: "rgba(242,109,109,0.12)", border: `1px solid rgba(242,109,109,0.3)`, borderRadius: 12, padding: "10px 14px", margin: "0 0 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, background: "rgba(251,113,133,0.12)", border: `1px solid rgba(251,113,133,0.3)`, borderRadius: 12, padding: "10px 14px", margin: "0 0 14px" }}>
           <span className="pk-blink" style={{ width: 10, height: 10, borderRadius: 999, background: C.danger, flexShrink: 0, boxShadow: `0 0 8px ${C.danger}` }} />
           <span style={{ color: C.ink, fontSize: 14, fontWeight: 600 }}>Слухаю… говоріть, текст зʼявляється нижче</span>
         </div>
@@ -341,11 +382,11 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 16 }}>
         <button className={`pk-press ${listening ? "pk-rec" : ""}`} onClick={toggleVoice} aria-label={listening ? "Зупинити запис" : "Голос"}
-          style={{ width: 68, height: 68, borderRadius: 22, border: `1px solid ${listening ? C.accent : C.line}`, background: listening ? C.accentGrad : C.surfaceSolid, color: listening ? "#fff" : C.ink, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+          style={{ width: 68, height: 68, borderRadius: 22, border: `1px solid ${listening ? C.accent : C.line}`, background: listening ? C.accentGrad : C.surfaceSolid, color: listening ? "#06231F" : C.ink, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
           <Mic size={28} />
         </button>
         <button className="pk-press" onClick={parse} disabled={!ready}
-          style={{ flex: 1, height: 56, borderRadius: 18, border: "none", background: ready ? C.accentGrad : "rgba(255,255,255,0.07)", color: ready ? "#fff" : C.muted, fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, cursor: ready ? "pointer" : "default", fontFamily: fontBody, boxShadow: ready ? "0 10px 28px rgba(139,92,246,.4)" : "none" }}>
+          style={{ flex: 1, height: 56, borderRadius: 18, border: "none", background: ready ? C.accentGrad : "rgba(255,255,255,0.07)", color: ready ? "#06231F" : C.muted, fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, cursor: ready ? "pointer" : "default", fontFamily: fontBody, boxShadow: ready ? `0 10px 28px rgba(${TEAL},.4)` : "none" }}>
           {loading
             ? <><Loader2 size={20} style={{ animation: "pkSpin 1s linear infinite" }} /> Думаю…</>
             : <><Sparkles size={20} /> Розкласти по задачах</>}
@@ -439,7 +480,7 @@ function TodayRow({ t, toggle, onOpen }: { t: Task; toggle: (t: Task) => void; o
     <div className="pk-card" style={{ ...cardStyle, opacity: isDone ? 0.5 : 1, display: "flex", alignItems: "flex-start", gap: 12, borderLeft: t.priority === "must" && !isDone ? `3px solid ${C.must}` : `1px solid ${C.line}` }}>
       <button className="pk-press" onClick={() => toggle(t)} aria-label="Готово"
         style={{ marginTop: 1, width: 26, height: 26, borderRadius: 999, border: `2px solid ${isDone ? C.done : C.line}`, background: isDone ? C.done : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", padding: 0 }}>
-        {isDone && <Check size={15} color="#0E0B18" />}
+        {isDone && <Check size={15} color="#06231F" />}
       </button>
       <div onClick={() => onOpen(t.id)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
         <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, textDecoration: isDone ? "line-through" : "none" }}>{t.title}</div>
@@ -502,7 +543,7 @@ function Week({ tasks, toggle, onOpen, goCapture }: {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {groups.map(g => (
             <div key={g.key}>
-              <div style={{ fontFamily: fontHead, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: g.key === "Прострочено" ? C.must : C.inkSoft, margin: "0 0 8px 2px" }}>
+              <div style={{ fontFamily: fontHead, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: g.key === "Прострочено" ? C.must : C.accent, margin: "0 0 8px 2px" }}>
                 {g.key} <span style={{ color: C.muted, fontWeight: 600 }}>· {g.items.length}</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -545,9 +586,9 @@ function Editor({ task, onSave, onDelete, onClose }: {
 
   return (
     <div onClick={onClose}
-      style={{ position: "absolute", inset: 0, zIndex: 10, background: "rgba(4,2,12,0.62)", display: "flex", flexDirection: "column", justifyContent: "flex-end", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}>
+      style={{ position: "absolute", inset: 0, zIndex: 10, background: "rgba(5,4,18,0.66)", display: "flex", flexDirection: "column", justifyContent: "flex-end", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}>
       <div className="pk-sheet pk-scroll" onClick={(e) => e.stopPropagation()}
-        style={{ background: "#14101E", borderTop: `1px solid ${C.line}`, borderRadius: "22px 22px 0 0", padding: "10px 20px calc(20px + env(safe-area-inset-bottom))", maxHeight: "92%", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,.5)" }}>
+        style={{ background: "#1A1740", borderTop: `1px solid ${C.line}`, borderRadius: "22px 22px 0 0", padding: "10px 20px calc(20px + env(safe-area-inset-bottom))", maxHeight: "92%", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,.5)" }}>
         <div style={{ width: 40, height: 4, borderRadius: 999, background: C.line, margin: "0 auto 14px" }} />
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
@@ -601,7 +642,7 @@ function Editor({ task, onSave, onDelete, onClose }: {
           </div>
 
           <button className="pk-press" onClick={onDelete}
-            style={{ background: "rgba(242,109,109,0.12)", color: C.danger, border: `1px solid rgba(242,109,109,0.25)`, borderRadius: 12, padding: "12px 14px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: fontBody, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
+            style={{ background: "rgba(251,113,133,0.12)", color: C.danger, border: `1px solid rgba(251,113,133,0.28)`, borderRadius: 12, padding: "12px 14px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: fontBody, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
             <Trash2 size={17} /> Видалити задачу
           </button>
         </div>
@@ -631,7 +672,7 @@ function Meta({ t }: { t: Task }) {
       {dl && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft }}>{dl}</span>}
       {hasNote && (
         <span aria-label="Є примітка" title="Є примітка"
-          style={{ ...chip, background: "rgba(139,92,246,0.15)", color: C.accent, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+          style={{ ...chip, background: `rgba(${TEAL},0.15)`, color: C.accent, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4 }}>
           <StickyNote size={12} />
         </span>
       )}
@@ -647,12 +688,12 @@ function Empty({ title, text, cta, onCta }: {
 }) {
   return (
     <div style={{ textAlign: "center", padding: "44px 18px 24px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ width: 64, height: 64, borderRadius: 20, background: C.surfaceSolid, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, boxShadow: `0 0 28px rgba(139,92,246,.25)` }}>
+      <div style={{ width: 64, height: 64, borderRadius: 20, background: C.surfaceSolid, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, boxShadow: `0 0 28px rgba(${TEAL},.25)` }}>
         <Sparkles size={26} color={C.accent} />
       </div>
       <div style={{ fontFamily: fontHead, fontSize: 21, fontWeight: 700, color: C.ink, marginBottom: 7 }}>{title}</div>
       <div style={{ color: C.inkSoft, fontSize: 14.5, lineHeight: 1.45, maxWidth: 280, marginBottom: 20 }}>{text}</div>
-      <button className="pk-press" onClick={onCta} style={{ background: C.accentGrad, color: "#fff", border: "none", borderRadius: 13, padding: "12px 20px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: fontBody, boxShadow: "0 10px 28px rgba(139,92,246,.4)" }}>{cta}</button>
+      <button className="pk-press" onClick={onCta} style={{ background: C.accentGrad, color: "#06231F", border: "none", borderRadius: 13, padding: "12px 20px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: fontBody, boxShadow: `0 10px 28px rgba(${TEAL},.4)` }}>{cta}</button>
     </div>
   );
 }
@@ -669,7 +710,7 @@ function Nav({ tab, setTab, inboxCount }: {
     { id: "week", label: "Тиждень", Icon: CalendarDays },
   ];
   return (
-    <div style={{ position: "relative", zIndex: 2, flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: "rgba(14,11,24,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", padding: "8px 8px 10px" }}>
+    <div style={{ position: "relative", zIndex: 2, flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: "rgba(20,18,51,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", padding: "8px 8px 10px" }}>
       {items.map(({ id, label, Icon, badge }) => {
         const on = tab === id;
         return (
@@ -678,7 +719,7 @@ function Nav({ tab, setTab, inboxCount }: {
             <div style={{ position: "relative" }}>
               <Icon size={23} color={on ? C.accent : C.muted} strokeWidth={on ? 2.4 : 2} />
               {badge ? (
-                <span style={{ position: "absolute", top: -5, right: -9, background: C.accent, color: "#fff", fontSize: 10.5, fontWeight: 700, minWidth: 16, height: 16, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{badge}</span>
+                <span style={{ position: "absolute", top: -5, right: -9, background: C.accent, color: "#06231F", fontSize: 10.5, fontWeight: 700, minWidth: 16, height: 16, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{badge}</span>
               ) : null}
             </div>
             <span style={{ fontSize: 11, fontWeight: on ? 700 : 500, color: on ? C.accent : C.muted }}>{label}</span>
