@@ -197,9 +197,13 @@ export default function App() {
         @keyframes pkUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @keyframes pkSheet { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
         @keyframes pkSpin { to { transform: rotate(360deg); } }
+        @keyframes pkPulse { 0% { box-shadow: 0 0 0 0 rgba(139,92,246,.55); } 70% { box-shadow: 0 0 0 18px rgba(139,92,246,0); } 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); } }
+        @keyframes pkBlink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
         .pk-card { animation: pkUp .28s ease both; }
         .pk-sheet { animation: pkSheet .26s cubic-bezier(.2,.7,.3,1) both; }
         .pk-press:active { transform: scale(.97); }
+        .pk-rec { animation: pkPulse 1.4s ease-out infinite; }
+        .pk-blink { animation: pkBlink 1s ease-in-out infinite; }
       `}</style>
 
       <div style={{ width: "100%", maxWidth: 430, height: "100%", background: C.bg, display: "flex", flexDirection: "column", position: "relative", boxShadow: "0 0 80px rgba(0,0,0,.5)", overflow: "hidden" }}>
@@ -266,6 +270,13 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
       <h1 style={{ fontFamily: fontHead, fontSize: 30, lineHeight: 1.08, color: C.ink, margin: "4px 0 6px", fontWeight: 700, letterSpacing: "-0.02em" }}>Що в голові?</h1>
       <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px", lineHeight: 1.45 }}>Вивали все підряд — текстом або голосом. Я розкладу це на задачі з пріоритетом, часом і дедлайнами.</p>
 
+      {listening && (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, background: "rgba(242,109,109,0.12)", border: `1px solid rgba(242,109,109,0.3)`, borderRadius: 12, padding: "10px 14px", margin: "0 0 14px" }}>
+          <span className="pk-blink" style={{ width: 10, height: 10, borderRadius: 999, background: C.danger, flexShrink: 0, boxShadow: `0 0 8px ${C.danger}` }} />
+          <span style={{ color: C.ink, fontSize: 14, fontWeight: 600 }}>Слухаю… говоріть, текст зʼявляється нижче</span>
+        </div>
+      )}
+
       <div style={{ flex: 1, minHeight: 220, display: "flex" }}>
         <textarea
           value={raw}
@@ -283,9 +294,9 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
       )}
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 16 }}>
-        <button className="pk-press" onClick={toggleVoice} aria-label="Голос"
-          style={{ width: 56, height: 56, borderRadius: 18, border: `1px solid ${listening ? C.accent : C.line}`, background: listening ? C.accent : C.surfaceSolid, color: listening ? "#fff" : C.ink, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-          <Mic size={22} />
+        <button className={`pk-press ${listening ? "pk-rec" : ""}`} onClick={toggleVoice} aria-label={listening ? "Зупинити запис" : "Голос"}
+          style={{ width: 68, height: 68, borderRadius: 22, border: `1px solid ${listening ? C.accent : C.line}`, background: listening ? C.accentGrad : C.surfaceSolid, color: listening ? "#fff" : C.ink, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+          <Mic size={28} />
         </button>
         <button className="pk-press" onClick={parse} disabled={!ready}
           style={{ flex: 1, height: 56, borderRadius: 18, border: "none", background: ready ? C.accentGrad : "rgba(255,255,255,0.07)", color: ready ? "#fff" : C.muted, fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, cursor: ready ? "pointer" : "default", fontFamily: fontBody, boxShadow: ready ? "0 10px 28px rgba(139,92,246,.4)" : "none" }}>
