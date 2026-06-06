@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Mic, Inbox as InboxIcon, Sun, Trash2, ArrowRight,
-  Sparkles, Loader2, Check, Clock, CalendarDays,
+  Sparkles, Loader2, Check, Clock, CalendarDays, X,
 } from "lucide-react";
 
 /* ── types ─────────────────────────────────────────────── */
@@ -15,6 +15,7 @@ type Task = {
   deadline: string | null;
   status: "inbox" | "today" | "done";
   createdAt: string;
+  note?: string;
 };
 
 type Tab = "capture" | "inbox" | "today" | "week";
@@ -35,6 +36,7 @@ const C = {
   mustBg: "rgba(244,114,182,0.13)",
   chipBg: "rgba(255,255,255,0.07)",
   done: "#34D399",
+  danger: "#F26D6D",
   muted: "#6E6982",
 };
 const fontHead = "'Inter', system-ui, -apple-system, sans-serif";
@@ -44,6 +46,8 @@ const chip: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, padding: "3
 const cardStyle: React.CSSProperties = { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: "14px 16px", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" };
 const dayBtn: React.CSSProperties = { flex: 1, height: 40, borderRadius: 11, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.06)", color: C.ink, fontWeight: 600, fontSize: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", fontFamily: fontBody };
 const delBtn: React.CSSProperties = { width: 44, height: 40, borderRadius: 11, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.06)", color: C.inkSoft, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 };
+const fieldStyle: React.CSSProperties = { width: "100%", background: C.surfaceSolid, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontSize: 15, color: C.ink, outline: "none", fontFamily: fontBody };
+const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: C.inkSoft, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 7px 2px" };
 
 /* ── helpers ───────────────────────────────────────────── */
 function fmtDur(min: number | null): string {
@@ -71,6 +75,14 @@ function plural(n: number): string {
   if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return "задачі";
   return "задач";
 }
+// ISO → значення для <input type="datetime-local"> у локальному часі
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const EXAMPLE = "треба написати Анні щодо контракту, доробити презу до завтра, забукати переговорку на 2 години, не забути подзвонити Олегу о 15, колись розібрати пошту";
 
@@ -82,6 +94,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState("");
   const [listening, setListening] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const recRef = useRef<any>(null);
   const baseRef = useRef("");
 
@@ -96,6 +109,7 @@ export default function App() {
   const active = dayTasks.filter(t => t.status === "today");
   const done = dayTasks.filter(t => t.status === "done");
   const plannedMin = dayTasks.reduce((s, t) => s + (t.estimateMin || 0), 0);
+  const editing = editId ? tasks.find(t => t.id === editId) ?? null : null;
 
   const update = (id: string, patch: Partial<Task>) =>
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
@@ -177,12 +191,14 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body { margin: 0; background: ${C.bgOuter}; }
-        textarea { font-family: ${fontBody}; }
-        textarea::placeholder { color: ${C.muted}; }
+        textarea, input { font-family: ${fontBody}; }
+        textarea::placeholder, input::placeholder { color: ${C.muted}; }
         .pk-scroll::-webkit-scrollbar { width: 0; }
         @keyframes pkUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @keyframes pkSheet { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
         @keyframes pkSpin { to { transform: rotate(360deg); } }
         .pk-card { animation: pkUp .28s ease both; }
+        .pk-sheet { animation: pkSheet .26s cubic-bezier(.2,.7,.3,1) both; }
         .pk-press:active { transform: scale(.97); }
       `}</style>
 
@@ -197,16 +213,18 @@ export default function App() {
           {tab === "inbox" && (
             <InboxView items={inbox}
               onDay={(id) => { update(id, { status: "today" }); setToast("Закинув у день"); }}
-              onDel={remove} goCapture={() => setTab("capture")} />
+              onDel={remove} onOpen={setEditId} goCapture={() => setTab("capture")} />
           )}
           {tab === "today" && (
             <Today active={active} done={done} plannedMin={plannedMin}
               toggle={(t) => update(t.id, { status: t.status === "done" ? "today" : "done" })}
+              onOpen={setEditId}
               goInbox={() => setTab(inbox.length ? "inbox" : "capture")} hasInbox={inbox.length > 0} />
           )}
           {tab === "week" && (
             <Week tasks={tasks}
               toggle={(t) => update(t.id, { status: t.status === "done" ? "today" : "done" })}
+              onOpen={setEditId}
               goCapture={() => setTab("capture")} />
           )}
         </div>
@@ -217,6 +235,15 @@ export default function App() {
           <div style={{ position: "absolute", left: 16, right: 16, bottom: 88, zIndex: 5, background: "#241F38", color: C.ink, border: `1px solid ${C.line}`, padding: "12px 16px", borderRadius: 14, fontSize: 14, fontWeight: 500, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
             {toast}
           </div>
+        )}
+
+        {editing && (
+          <Editor
+            task={editing}
+            onSave={(patch) => { update(editing.id, patch); setEditId(null); setToast("Збережено"); }}
+            onDelete={() => { remove(editing.id); setEditId(null); setToast("Видалено"); }}
+            onClose={() => setEditId(null)}
+          />
         )}
       </div>
     </div>
@@ -271,23 +298,24 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
   );
 }
 
-function InboxView({ items, onDay, onDel, goCapture }: {
+function InboxView({ items, onDay, onDel, onOpen, goCapture }: {
   items: Task[];
   onDay: (id: string) => void;
   onDel: (id: string) => void;
+  onOpen: (id: string) => void;
   goCapture: () => void;
 }) {
   return (
     <div>
       <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em" }}>Inbox</h1>
-      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Залиш, закинь у день або видали.</p>
+      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Тапни задачу, щоб відредагувати. Або закинь у день / видали.</p>
       {items.length === 0 ? (
         <Empty title="Тут поки порожньо" text="Напиши або надиктуй потік думок — задачі впадуть сюди вже розкладеними." cta="Записати думки" onCta={goCapture} />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map(t => (
             <div key={t.id} className="pk-card" style={cardStyle}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
                 <span style={{ width: 9, height: 9, borderRadius: 999, background: t.priority === "must" ? C.must : C.muted, marginTop: 7, flexShrink: 0, boxShadow: t.priority === "must" ? `0 0 8px ${C.must}` : "none" }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3 }}>{t.title}</div>
@@ -306,11 +334,12 @@ function InboxView({ items, onDay, onDel, goCapture }: {
   );
 }
 
-function Today({ active, done, plannedMin, toggle, goInbox, hasInbox }: {
+function Today({ active, done, plannedMin, toggle, onOpen, goInbox, hasInbox }: {
   active: Task[];
   done: Task[];
   plannedMin: number;
   toggle: (t: Task) => void;
+  onOpen: (id: string) => void;
   goInbox: () => void;
   hasInbox: boolean;
 }) {
@@ -338,33 +367,40 @@ function Today({ active, done, plannedMin, toggle, goInbox, hasInbox }: {
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-          {active.map(t => <TodayRow key={t.id} t={t} toggle={toggle} />)}
-          {done.map(t => <TodayRow key={t.id} t={t} toggle={toggle} />)}
+          {active.map(t => <TodayRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
+          {done.map(t => <TodayRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
         </div>
       )}
     </div>
   );
 }
 
-function TodayRow({ t, toggle }: { t: Task; toggle: (t: Task) => void }) {
+function TodayRow({ t, toggle, onOpen }: { t: Task; toggle: (t: Task) => void; onOpen: (id: string) => void }) {
   const isDone = t.status === "done";
+  const hasNote = !!(t.note && t.note.trim());
   return (
     <div className="pk-card" style={{ ...cardStyle, opacity: isDone ? 0.5 : 1, display: "flex", alignItems: "flex-start", gap: 12, borderLeft: t.priority === "must" && !isDone ? `3px solid ${C.must}` : `1px solid ${C.line}` }}>
       <button className="pk-press" onClick={() => toggle(t)} aria-label="Готово"
         style={{ marginTop: 1, width: 26, height: 26, borderRadius: 999, border: `2px solid ${isDone ? C.done : C.line}`, background: isDone ? C.done : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", padding: 0 }}>
         {isDone && <Check size={15} color="#0E0B18" />}
       </button>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div onClick={() => onOpen(t.id)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
         <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, textDecoration: isDone ? "line-through" : "none" }}>{t.title}</div>
         {!isDone && <Meta t={t} />}
+        {!isDone && hasNote && (
+          <div style={{ marginTop: 6, fontSize: 13, color: C.inkSoft, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {t.note}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function Week({ tasks, toggle, goCapture }: {
+function Week({ tasks, toggle, onOpen, goCapture }: {
   tasks: Task[];
   toggle: (t: Task) => void;
+  onOpen: (id: string) => void;
   goCapture: () => void;
 }) {
   const today0 = (() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime(); })();
@@ -402,7 +438,7 @@ function Week({ tasks, toggle, goCapture }: {
   return (
     <div>
       <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em" }}>Тиждень</h1>
-      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Задачі з дедлайном, розкладені по днях. Тап = виконано.</p>
+      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Задачі з дедлайном, розкладені по днях. Тап по тексту — редагувати.</p>
       {groups.length === 0 ? (
         <Empty title="Поки нема дедлайнів" text="Задачі, де ти згадав день чи час (напр. «у четвер», «завтра о 10»), зʼявляться тут за днями." cta="Записати думки" onCta={goCapture} />
       ) : (
@@ -413,13 +449,116 @@ function Week({ tasks, toggle, goCapture }: {
                 {g.key} <span style={{ color: C.muted, fontWeight: 600 }}>· {g.items.length}</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {g.items.map(t => <TodayRow key={t.id} t={t} toggle={toggle} />)}
+                {g.items.map(t => <TodayRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
               </div>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/* ── editor ────────────────────────────────────────────── */
+function Editor({ task, onSave, onDelete, onClose }: {
+  task: Task;
+  onSave: (patch: Partial<Task>) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [priority, setPriority] = useState<Task["priority"]>(task.priority);
+  const [deadlineLocal, setDeadlineLocal] = useState(isoToLocalInput(task.deadline));
+  const [estimate, setEstimate] = useState(task.estimateMin != null ? String(task.estimateMin) : "");
+  const [note, setNote] = useState(task.note ?? "");
+
+  const canSave = title.trim().length > 0;
+
+  function save() {
+    if (!canSave) return;
+    const est = parseInt(estimate, 10);
+    onSave({
+      title: title.trim(),
+      priority,
+      deadline: deadlineLocal ? new Date(deadlineLocal).toISOString() : null,
+      estimateMin: Number.isFinite(est) && est > 0 ? est : null,
+      note: note.trim() ? note.trim() : "",
+    });
+  }
+
+  return (
+    <div onClick={onClose}
+      style={{ position: "absolute", inset: 0, zIndex: 10, background: "rgba(4,2,12,0.62)", display: "flex", flexDirection: "column", justifyContent: "flex-end", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}>
+      <div className="pk-sheet pk-scroll" onClick={(e) => e.stopPropagation()}
+        style={{ background: "#14101E", borderTop: `1px solid ${C.line}`, borderRadius: "22px 22px 0 0", padding: "10px 20px calc(20px + env(safe-area-inset-bottom))", maxHeight: "92%", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,.5)" }}>
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: C.line, margin: "0 auto 14px" }} />
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <button className="pk-press" onClick={onClose} style={{ background: "transparent", border: "none", color: C.inkSoft, fontSize: 15, fontWeight: 600, cursor: "pointer", padding: 4, fontFamily: fontBody }}>Скасувати</button>
+          <span style={{ fontFamily: fontHead, fontSize: 16, fontWeight: 700, color: C.ink }}>Задача</span>
+          <button className="pk-press" onClick={save} disabled={!canSave}
+            style={{ background: "transparent", border: "none", color: canSave ? C.accent : C.muted, fontSize: 15, fontWeight: 700, cursor: canSave ? "pointer" : "default", padding: 4, fontFamily: fontBody }}>Зберегти</button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <div style={labelStyle}>Опис</div>
+            <textarea value={title} onChange={(e) => setTitle(e.target.value)} rows={2}
+              placeholder="Що треба зробити?"
+              style={{ ...fieldStyle, resize: "none", lineHeight: 1.4 }} />
+          </div>
+
+          <div>
+            <div style={labelStyle}>Пріоритет</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <SegBtn active={priority === "must"} onClick={() => setPriority("must")} color={C.must} label="Важливо" />
+              <SegBtn active={priority === "nice"} onClick={() => setPriority("nice")} color={C.accent} label="Звичайне" />
+            </div>
+          </div>
+
+          <div>
+            <div style={labelStyle}>Дедлайн</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="datetime-local" value={deadlineLocal} onChange={(e) => setDeadlineLocal(e.target.value)}
+                style={{ ...fieldStyle, flex: 1, colorScheme: "dark" }} />
+              {deadlineLocal && (
+                <button className="pk-press" onClick={() => setDeadlineLocal("")} aria-label="Прибрати дедлайн"
+                  style={{ ...delBtn, width: 46 }}><X size={18} /></button>
+              )}
+            </div>
+            {!deadlineLocal && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginLeft: 2 }}>Без дедлайну</div>}
+          </div>
+
+          <div>
+            <div style={labelStyle}>Оцінка часу (хв)</div>
+            <input type="number" inputMode="numeric" min={0} value={estimate}
+              onChange={(e) => setEstimate(e.target.value)} placeholder="напр. 30"
+              style={{ ...fieldStyle, colorScheme: "dark" }} />
+          </div>
+
+          <div>
+            <div style={labelStyle}>Примітки</div>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4}
+              placeholder="Деталі, посилання, контекст…"
+              style={{ ...fieldStyle, resize: "none", lineHeight: 1.45 }} />
+          </div>
+
+          <button className="pk-press" onClick={onDelete}
+            style={{ background: "rgba(242,109,109,0.12)", color: C.danger, border: `1px solid rgba(242,109,109,0.25)`, borderRadius: 12, padding: "12px 14px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: fontBody, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
+            <Trash2 size={17} /> Видалити задачу
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SegBtn({ active, onClick, color, label }: { active: boolean; onClick: () => void; color: string; label: string }) {
+  return (
+    <button className="pk-press" onClick={onClick}
+      style={{ flex: 1, height: 44, borderRadius: 12, border: `1px solid ${active ? color : C.line}`, background: active ? `${color}22` : C.surfaceSolid, color: active ? color : C.inkSoft, fontWeight: 700, fontSize: 14.5, cursor: "pointer", fontFamily: fontBody }}>
+      {label}
+    </button>
   );
 }
 
