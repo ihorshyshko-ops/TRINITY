@@ -110,7 +110,14 @@ export default function App() {
         body: JSON.stringify({
           text,
           nowIso: now.toISOString(),
-          nowLocal: now.toLocaleString("uk-UA"),
+          nowLocal: now.toLocaleString("uk-UA", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
         }),
       });
 
