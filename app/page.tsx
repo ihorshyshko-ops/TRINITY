@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Mic, Inbox as InboxIcon, Sun, Trash2, ArrowRight,
-  Sparkles, Loader2, Check, Clock,
+  Sparkles, Loader2, Check, Clock, CalendarDays,
 } from "lucide-react";
 
 /* ── types ─────────────────────────────────────────────── */
@@ -17,7 +17,7 @@ type Task = {
   createdAt: string;
 };
 
-type Tab = "capture" | "inbox" | "today";
+type Tab = "capture" | "inbox" | "today" | "week";
 
 /* ── theme ─────────────────────────────────────────────── */
 const C = {
@@ -198,6 +198,11 @@ export default function App() {
               toggle={(t) => update(t.id, { status: t.status === "done" ? "today" : "done" })}
               goInbox={() => setTab(inbox.length ? "inbox" : "capture")} hasInbox={inbox.length > 0} />
           )}
+          {tab === "week" && (
+            <Week tasks={tasks}
+              toggle={(t) => update(t.id, { status: t.status === "done" ? "today" : "done" })}
+              goCapture={() => setTab("capture")} />
+          )}
         </div>
 
         <Nav tab={tab} setTab={setTab} inboxCount={inbox.length} />
@@ -351,6 +356,67 @@ function TodayRow({ t, toggle }: { t: Task; toggle: (t: Task) => void }) {
   );
 }
 
+function Week({ tasks, toggle, goCapture }: {
+  tasks: Task[];
+  toggle: (t: Task) => void;
+  goCapture: () => void;
+}) {
+  const today0 = (() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime(); })();
+
+  const dated = tasks
+    .map(t => {
+      const d = t.deadline ? new Date(t.deadline) : null;
+      if (!d || isNaN(d.getTime())) return null;
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const days = Math.round((dayStart - today0) / 86400000);
+      return { t, d, days, ts: d.getTime() };
+    })
+    .filter((x): x is { t: Task; d: Date; days: number; ts: number } => x !== null)
+    .sort((a, b) => a.ts - b.ts);
+
+  const labelFor = (days: number, d: Date) => {
+    if (days < 0) return "Прострочено";
+    if (days === 0) return "Сьогодні";
+    if (days === 1) return "Завтра";
+    if (days <= 7) {
+      const wd = d.toLocaleDateString("uk-UA", { weekday: "long" });
+      return wd.charAt(0).toUpperCase() + wd.slice(1);
+    }
+    return "Пізніше";
+  };
+
+  const groups: { key: string; items: Task[] }[] = [];
+  for (const x of dated) {
+    const key = labelFor(x.days, x.d);
+    let g = groups.find(g => g.key === key);
+    if (!g) { g = { key, items: [] }; groups.push(g); }
+    g.items.push(x.t);
+  }
+
+  return (
+    <div>
+      <h1 style={{ fontFamily: fontHead, fontSize: 28, color: C.ink, margin: "4px 0 4px", fontWeight: 600 }}>Тиждень</h1>
+      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Задачі з дедлайном, розкладені по днях. Тап = виконано.</p>
+      {groups.length === 0 ? (
+        <Empty title="Поки нема дедлайнів" text="Задачі, де ти згадав день чи час (напр. «у четвер», «завтра о 10»), зʼявляться тут за днями." cta="Записати думки" onCta={goCapture} />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {groups.map(g => (
+            <div key={g.key}>
+              <div style={{ fontFamily: fontHead, fontSize: 16, fontWeight: 600, color: g.key === "Прострочено" ? C.accentDark : C.inkSoft, margin: "0 0 8px 2px" }}>
+                {g.key} <span style={{ color: C.muted, fontWeight: 500 }}>· {g.items.length}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {g.items.map(t => <TodayRow key={t.id} t={t} toggle={toggle} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── bits ──────────────────────────────────────────────── */
 function Meta({ t }: { t: Task }) {
   const dur = fmtDur(t.estimateMin);
@@ -391,6 +457,7 @@ function Nav({ tab, setTab, inboxCount }: {
     { id: "capture", label: "Думки", Icon: Mic },
     { id: "inbox", label: "Inbox", Icon: InboxIcon, badge: inboxCount },
     { id: "today", label: "Сьогодні", Icon: Sun },
+    { id: "week", label: "Тиждень", Icon: CalendarDays },
   ];
   return (
     <div style={{ flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: C.surface, padding: "8px 8px 10px" }}>
