@@ -84,6 +84,33 @@ function isoToLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const STORAGE_KEY = "trinity.tasks.v1";
+
+// Захищена нормалізація збережених даних → масив валідних Task.
+function coerceTasks(input: unknown): Task[] {
+  if (!Array.isArray(input)) return [];
+  const out: Task[] = [];
+  for (const it of input) {
+    if (!it || typeof it !== "object") continue;
+    const t = it as Record<string, unknown>;
+    const title = typeof t.title === "string" ? t.title : "";
+    if (!title.trim()) continue;
+    const status = t.status === "today" || t.status === "done" ? t.status : "inbox";
+    const est = Number(t.estimateMin);
+    out.push({
+      id: typeof t.id === "string" && t.id ? t.id : crypto.randomUUID(),
+      title,
+      priority: t.priority === "must" ? "must" : "nice",
+      estimateMin: Number.isFinite(est) && est > 0 ? Math.round(est) : null,
+      deadline: typeof t.deadline === "string" && t.deadline ? t.deadline : null,
+      status,
+      createdAt: typeof t.createdAt === "string" && t.createdAt ? t.createdAt : new Date().toISOString(),
+      note: typeof t.note === "string" ? t.note : undefined,
+    });
+  }
+  return out;
+}
+
 const EXAMPLE = "треба написати Анні щодо контракту, доробити презу до завтра, забукати переговорку на 2 години, не забути подзвонити Олегу о 15, колись розібрати пошту";
 
 /* ── app ───────────────────────────────────────────────── */
@@ -95,6 +122,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [listening, setListening] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const recRef = useRef<any>(null);
   const baseRef = useRef("");
 
@@ -103,6 +131,24 @@ export default function App() {
     const t = setTimeout(() => setToast(""), 2600);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Завантажити збережені задачі (один раз, на клієнті).
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s) setTasks(coerceTasks(JSON.parse(s)));
+    } catch { /* ignore corrupt storage */ }
+    setLoaded(true);
+  }, []);
+
+  // Зберігати при кожній зміні — але лише після первинного завантаження,
+  // щоб не затерти сховище порожнім масивом до гідрації.
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    } catch { /* ignore quota / private mode */ }
+  }, [tasks, loaded]);
 
   const inbox = tasks.filter(t => t.status === "inbox");
   const dayTasks = tasks.filter(t => t.status !== "inbox");
