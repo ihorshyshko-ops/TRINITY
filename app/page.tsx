@@ -354,7 +354,7 @@ function Capture({ raw, setRaw, parse, loading, listening, toggleVoice, setExamp
   const ready = raw.trim() && !loading;
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <h1 style={{ fontFamily: fontHead, fontSize: 30, lineHeight: 1.08, color: C.ink, margin: "4px 0 6px", fontWeight: 700, letterSpacing: "-0.02em" }}>Що в голові?</h1>
+      <h1 style={{ fontFamily: fontHead, fontSize: 30, lineHeight: 1.08, color: C.ink, margin: "4px 0 6px", fontWeight: 700, letterSpacing: "-0.02em" }}>Який план?</h1>
       <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px", lineHeight: 1.45 }}>Вивали все підряд — текстом або голосом. Я розкладу це на задачі з пріоритетом, часом і дедлайнами.</p>
 
       {listening && (
@@ -421,7 +421,7 @@ function InboxView({ items, onDay, onDel, onOpen, goCapture }: {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button className="pk-press" onClick={() => onDay(t.id)} style={dayBtn}><ArrowRight size={16} /> У день</button>
+                <button className="pk-press" onClick={() => onDay(t.id)} style={dayBtn}><ArrowRight size={16} /> Зробити сьогодні</button>
                 <button className="pk-press" onClick={() => onDel(t.id)} aria-label="Видалити" style={delBtn}><Trash2 size={17} /></button>
               </div>
             </div>
