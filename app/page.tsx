@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Mic, Inbox as InboxIcon, Sun, Trash2, ArrowRight,
-  Sparkles, Loader2, Check, Clock, CalendarDays, X,
+  Sparkles, Loader2, Check, Clock, CalendarDays, X, StickyNote,
 } from "lucide-react";
 
 /* ── types ─────────────────────────────────────────────── */
@@ -566,11 +566,18 @@ function SegBtn({ active, onClick, color, label }: { active: boolean; onClick: (
 function Meta({ t }: { t: Task }) {
   const dur = fmtDur(t.estimateMin);
   const dl = fmtDeadline(t.deadline);
-  if (!dur && !dl) return null;
+  const hasNote = !!(t.note && t.note.trim());
+  if (!dur && !dl && !hasNote) return null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 7, alignItems: "center" }}>
       {dur && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft, display: "inline-flex", alignItems: "center", gap: 4 }}><Clock size={12} /> {dur}</span>}
       {dl && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft }}>{dl}</span>}
+      {hasNote && (
+        <span aria-label="Є примітка" title="Є примітка"
+          style={{ ...chip, background: "rgba(139,92,246,0.15)", color: C.accent, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <StickyNote size={12} />
+        </span>
+      )}
     </div>
   );
 }
