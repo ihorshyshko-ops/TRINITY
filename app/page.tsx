@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Mic, Inbox as InboxIcon, Sun, Trash2, ArrowRight,
-  Sparkles, Loader2, Check, Clock, CalendarDays, X, StickyNote, Archive,
+  Sparkles, Loader2, Check, Clock, CalendarDays, X, StickyNote, Archive, Flame,
 } from "lucide-react";
 
 /* ── types ─────────────────────────────────────────────── */
@@ -23,7 +23,7 @@ type Task = {
   note?: string;
 };
 
-type Tab = "capture" | "inbox" | "today" | "week" | "archive";
+type Tab = "capture" | "inbox" | "today" | "week" | "overdue" | "archive";
 type CatFilterValue = "all" | Category;
 
 /* ── theme (TRINITY — deep indigo / teal glow) ─────────── */
@@ -213,6 +213,9 @@ export default function App() {
   const active = byCat(tasks.filter(t => t.status === "today"));
   const archived = byCat(tasks.filter(t => t.status === "done"));
   const weekTasks = byCat(tasks.filter(t => t.status !== "done"));
+  const overdueAll = tasks.filter(t => t.status !== "done" && !!t.deadline && new Date(t.deadline as string).getTime() < Date.now());
+  const overdue = byCat(overdueAll);
+  const overdueCount = overdueAll.length;
   const inboxCount = tasks.filter(t => t.status === "inbox").length;
   const editing = editId ? tasks.find(t => t.id === editId) ?? null : null;
 
@@ -331,13 +334,16 @@ export default function App() {
           {tab === "week" && (
             <Week tasks={weekTasks} toggle={toggle} onOpen={setEditId} goCapture={() => setTab("capture")} />
           )}
+          {tab === "overdue" && (
+            <OverdueView items={overdue} toggle={toggle} onOpen={setEditId} goCapture={() => setTab("capture")} />
+          )}
           {tab === "archive" && (
             <ArchiveView items={archived} toggle={toggle} onOpen={setEditId}
               onClear={() => { setTasks(prev => prev.filter(t => t.status !== "done")); setToast("Архів очищено"); }} />
           )}
         </div>
 
-        <Nav tab={tab} setTab={setTab} inboxCount={inboxCount} />
+        <Nav tab={tab} setTab={setTab} inboxCount={inboxCount} overdueCount={overdueCount} />
 
         {toast && (
           <div style={{ position: "absolute", left: 16, right: 16, bottom: 88, zIndex: 5, background: "#241F47", color: C.ink, border: `1px solid ${C.line}`, padding: "12px 16px", borderRadius: 14, fontSize: 14, fontWeight: 500, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
@@ -598,6 +604,31 @@ function ArchiveView({ items, toggle, onOpen, onClear }: {
   );
 }
 
+function OverdueView({ items, toggle, onOpen, goCapture }: {
+  items: Task[];
+  toggle: (t: Task) => void;
+  onOpen: (id: string) => void;
+  goCapture: () => void;
+}) {
+  const sorted = [...items].sort((a, b) =>
+    new Date(a.deadline ?? 0).getTime() - new Date(b.deadline ?? 0).getTime());
+  return (
+    <div>
+      <h1 style={{ fontFamily: fontHead, fontSize: 28, color: sorted.length ? C.danger : C.ink, margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.02em", display: "inline-flex", alignItems: "center", gap: 9 }}>
+        <Flame size={24} color={sorted.length ? C.danger : C.inkSoft} /> Горить
+      </h1>
+      <p style={{ color: C.inkSoft, fontSize: 15, margin: "0 0 18px" }}>Прострочені задачі — дедлайн минув, а вони не виконані.</p>
+      {sorted.length === 0 ? (
+        <Empty title="Нічого не горить 🎉" text="Тут зʼявляться задачі, у яких минув дедлайн і які ще не виконані." cta="Записати думки" onCta={goCapture} />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {sorted.map(t => <TaskRow key={t.id} t={t} toggle={toggle} onOpen={onOpen} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TaskRow({ t, toggle, onOpen }: { t: Task; toggle: (t: Task) => void; onOpen: (id: string) => void }) {
   const isDone = t.status === "done";
   const hasNote = !!(t.note && t.note.trim());
@@ -739,12 +770,13 @@ function Meta({ t }: { t: Task }) {
   const hasNote = !!(t.note && t.note.trim());
   const p = PRIO[t.priority];
   const c = CAT[t.category];
+  const dlOverdue = !!t.deadline && t.status !== "done" && new Date(t.deadline).getTime() < Date.now();
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 7, alignItems: "center" }}>
       <span style={{ ...chip, background: `${p.color}22`, color: p.color }}>{p.short}</span>
       <span style={{ ...chip, background: `${c.color}22`, color: c.color }}>{c.label}</span>
       {dur && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft, display: "inline-flex", alignItems: "center", gap: 4 }}><Clock size={12} /> {dur}</span>}
-      {dl && <span style={{ ...chip, background: C.chipBg, color: C.inkSoft }}>{dl}</span>}
+      {dl && <span style={{ ...chip, background: dlOverdue ? "rgba(251,113,133,0.18)" : C.chipBg, color: dlOverdue ? C.danger : C.inkSoft, fontWeight: dlOverdue ? 700 : 600 }}>{dlOverdue ? `⚠ ${dl}` : dl}</span>}
       {hasNote && (
         <span aria-label="Є примітка" title="Є примітка"
           style={{ ...chip, background: `rgba(${TEAL},0.15)`, color: C.accent, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -775,32 +807,38 @@ function Empty({ title, text, cta, onCta }: {
   );
 }
 
-function Nav({ tab, setTab, inboxCount }: {
+function Nav({ tab, setTab, inboxCount, overdueCount }: {
   tab: Tab;
   setTab: (t: Tab) => void;
   inboxCount: number;
+  overdueCount: number;
 }) {
-  const items: { id: Tab; label: string; Icon: typeof Mic; badge?: number }[] = [
+  const items: { id: Tab; label: string; Icon: typeof Mic; badge?: number; danger?: boolean }[] = [
     { id: "capture", label: "Думки", Icon: Mic },
     { id: "inbox", label: "Inbox", Icon: InboxIcon, badge: inboxCount },
     { id: "today", label: "Сьогодні", Icon: Sun },
     { id: "week", label: "Тиждень", Icon: CalendarDays },
+    { id: "overdue", label: "Горить", Icon: Flame, badge: overdueCount, danger: overdueCount > 0 },
     { id: "archive", label: "Архів", Icon: Archive },
   ];
   return (
-    <div style={{ position: "relative", zIndex: 2, flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: "rgba(20,18,51,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", padding: "8px 4px 10px" }}>
-      {items.map(({ id, label, Icon, badge }) => {
+    <div style={{ position: "relative", zIndex: 2, flexShrink: 0, display: "flex", borderTop: `1px solid ${C.line}`, background: "rgba(20,18,51,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", padding: "8px 2px 10px" }}>
+      {items.map(({ id, label, Icon, badge, danger }) => {
         const on = tab === id;
+        const burning = !!danger;
+        const color = burning ? C.danger : (on ? C.accent : C.muted);
         return (
           <button key={id} className="pk-press" onClick={() => setTab(id)}
             style={{ flex: 1, background: "transparent", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 0", cursor: "pointer" }}>
             <div style={{ position: "relative" }}>
-              <Icon size={22} color={on ? C.accent : C.muted} strokeWidth={on ? 2.4 : 2} />
+              <Icon size={22} color={color} strokeWidth={on || burning ? 2.4 : 2}
+                style={burning ? { filter: `drop-shadow(0 0 6px ${C.danger})` } : undefined} />
               {badge ? (
-                <span style={{ position: "absolute", top: -5, right: -9, background: C.accent, color: "#06231F", fontSize: 10, fontWeight: 700, minWidth: 15, height: 15, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{badge}</span>
+                <span className={burning ? "pk-blink" : undefined}
+                  style={{ position: "absolute", top: -5, right: -9, background: burning ? C.danger : C.accent, color: burning ? "#fff" : "#06231F", fontSize: 10, fontWeight: 700, minWidth: 15, height: 15, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{badge}</span>
               ) : null}
             </div>
-            <span style={{ fontSize: 10.5, fontWeight: on ? 700 : 500, color: on ? C.accent : C.muted }}>{label}</span>
+            <span style={{ fontSize: 10, fontWeight: on || burning ? 700 : 500, color }}>{label}</span>
           </button>
         );
       })}
